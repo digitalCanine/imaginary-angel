@@ -10,7 +10,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 
 ## Features
 
-### 🛡️ System Health & Auto-Repair
+### System Health & Auto-Repair
 
 - Real-time CPU, memory, and disk monitoring
 - Automatic cleanup of temporary files and package caches
@@ -18,7 +18,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Configurable alert thresholds
 - Optional automatic fixes for common issues
 
-### 🔒 Security Audit & Hardening
+### Security Audit & Hardening
 
 - SSH security configuration checks
 - Firewall status verification
@@ -29,7 +29,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - MAC system (AppArmor/SELinux) verification
 - Failed login attempt monitoring
 
-### 🌐 Network Threat Detection
+### Network Threat Detection
 
 - Suspicious connection monitoring
 - Port scan detection
@@ -39,7 +39,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Network interface analysis
 - Packet filtering rule inspection
 
-### 🔍 Process Analysis & Cleanup
+### Process Analysis & Cleanup
 
 - Resource-intensive process identification
 - Suspicious process detection
@@ -47,7 +47,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Deleted binary detection
 - Process running from temporary directories
 
-### 🔧 System Integrity & Recovery
+### System Integrity & Recovery
 
 - Package database integrity verification
 - Critical system file checks
@@ -56,7 +56,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Boot configuration verification
 - Systemd journal analysis
 
-### 📦 Package Management
+### Package Management
 
 - System updates
 - Package search and installation
@@ -65,7 +65,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Outdated package detection
 - Package statistics
 
-### ⚙️ Service Management
+### Service Management
 
 - Active service monitoring
 - Failed service restart
@@ -73,7 +73,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Service resource usage analysis
 - Boot time analysis
 
-### 📊 System Reports & Diagnostics
+### System Reports & Diagnostics
 
 - Comprehensive system reports
 - System log viewing (journalctl)
@@ -86,6 +86,14 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 ## Installation
 
 ### From Imaginary Linux Repository (Recommended)
+
+Add this to your `pacman.conf`
+
+```
+[imaginary]
+SigLevel = Optional TrustAll
+Server = https://github.com/digitalcanine/imaginary-repo/releases/download/packages
+```
 
 ```bash
 sudo pacman -S imaginary-angel
