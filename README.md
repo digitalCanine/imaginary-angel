@@ -11,6 +11,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 ## Features
 
 ### 🛡️ System Health & Auto-Repair
+
 - Real-time CPU, memory, and disk monitoring
 - Automatic cleanup of temporary files and package caches
 - Service health monitoring and recovery
@@ -18,6 +19,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Optional automatic fixes for common issues
 
 ### 🔒 Security Audit & Hardening
+
 - SSH security configuration checks
 - Firewall status verification
 - User privilege auditing
@@ -28,6 +30,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Failed login attempt monitoring
 
 ### 🌐 Network Threat Detection
+
 - Suspicious connection monitoring
 - Port scan detection
 - DDoS attempt identification
@@ -37,6 +40,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Packet filtering rule inspection
 
 ### 🔍 Process Analysis & Cleanup
+
 - Resource-intensive process identification
 - Suspicious process detection
 - Zombie process cleanup
@@ -44,6 +48,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Process running from temporary directories
 
 ### 🔧 System Integrity & Recovery
+
 - Package database integrity verification
 - Critical system file checks
 - Configuration file merge detection
@@ -52,6 +57,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Systemd journal analysis
 
 ### 📦 Package Management
+
 - System updates
 - Package search and installation
 - Orphaned package cleanup
@@ -60,6 +66,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Package statistics
 
 ### ⚙️ Service Management
+
 - Active service monitoring
 - Failed service restart
 - Unnecessary service identification
@@ -67,6 +74,7 @@ Imaginary Angel is a comprehensive system security and maintenance tool designed
 - Boot time analysis
 
 ### 📊 System Reports & Diagnostics
+
 - Comprehensive system reports
 - System log viewing (journalctl)
 - Failed login attempt tracking
@@ -86,17 +94,20 @@ sudo pacman -S imaginary-angel
 ### Manual Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/digitalcanine/imaginary-angel.git
 cd imaginary-angel
 ```
 
 2. Install dependencies:
+
 ```bash
 sudo pacman -S bash coreutils util-linux procps-ng net-tools iproute2 systemd grep sed awk bc
 ```
 
 3. Install the package:
+
 ```bash
 makepkg -si
 ```
@@ -104,6 +115,7 @@ makepkg -si
 ## Dependencies
 
 ### Required
+
 - `bash` - Shell interpreter
 - `coreutils` - Core utilities (cat, chmod, etc.)
 - `util-linux` - System utilities (lsblk, findmnt, etc.)
@@ -117,6 +129,7 @@ makepkg -si
 - `bc` - Calculator for floating point math
 
 ### Optional (for enhanced features)
+
 - `ufw` - Uncomplicated Firewall
 - `nethogs` - Network bandwidth monitor
 - `smartmontools` - Disk health monitoring (smartctl)
@@ -176,18 +189,21 @@ When enabled, the tool will automatically attempt to fix detected issues.
 ## Examples
 
 ### Quick System Health Check
+
 ```bash
 sudo imaginary-angel
 # Select option 1 (System Health & Auto-Repair)
 ```
 
 ### Security Audit
+
 ```bash
 sudo imaginary-angel
 # Select option 2 (Security Audit & Hardening)
 ```
 
 ### Generate Full System Report
+
 ```bash
 sudo imaginary-angel
 # Select option 8 (System Reports & Diagnostics)
@@ -205,6 +221,7 @@ Reports are saved to `/var/log/imaginary-angel/`
 ## Security Considerations
 
 Imaginary Angel requires root privileges to:
+
 - Read system configuration files
 - Monitor processes and network connections
 - Apply security fixes
@@ -217,6 +234,7 @@ Always review changes before enabling AUTO_FIX mode.
 ### Module Loading Errors
 
 Ensure the `modules` directory is in the same location as the main script:
+
 ```bash
 /usr/bin/imaginary-angel
 /usr/share/imaginary-angel/modules/
@@ -225,6 +243,7 @@ Ensure the `modules` directory is in the same location as the main script:
 ### Permission Errors
 
 Make sure you're running with sudo:
+
 ```bash
 sudo imaginary-angel
 ```
@@ -232,14 +251,15 @@ sudo imaginary-angel
 ### Missing Dependencies
 
 Install all required packages:
+
 ```bash
 sudo pacman -S bash coreutils util-linux procps-ng net-tools iproute2 systemd grep sed awk bc
 ```
 
-
 ### Development
 
 The project structure:
+
 ```
 imaginary-angel/
 ├── angel                    # Main script
@@ -252,13 +272,13 @@ imaginary-angel/
 │   ├── packages.sh
 │   ├── services.sh
 │   └── reports.sh
-├── PKGBUILD                # Package build file
 └── README.md
 ```
 
 ## Version History
 
 ### v1.0 (Shamshel) - Current
+
 - Initial release
 - System health monitoring
 - Security auditing
@@ -279,6 +299,6 @@ Created for Imaginary Linux by digitalcanine
 
 ## Links
 
-- **GitHub**: https://github.com/digitalcanine/imaginary-angel
-- **Imaginary Linux**: https://github.com/digitalcanine/imaginary-linux
-- **Issues**: https://github.com/digitalcanine/imaginary-angel/issues
+- **GitHub**: <https://github.com/digitalcanine/imaginary-angel>
+- **Imaginary Linux**: <https://github.com/digitalcanine/imaginary-linux>
+- **Issues**: <https://github.com/digitalcanine/imaginary-angel/issue>
