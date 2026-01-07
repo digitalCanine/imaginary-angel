@@ -18,7 +18,7 @@ network_threat_detection() {
   print_status "info" "Analyzing network traffic and connections..."
   echo ""
 
-  # ========== SUSPICIOUS CONNECTIONS ==========
+  # Sussy connections
   print_status "info" "Checking for suspicious network connections..."
   echo ""
 
@@ -44,7 +44,7 @@ network_threat_detection() {
     done < <(ss -tunap 2>/dev/null | grep ESTAB)
   fi
 
-  # ========== MULTIPLE CONNECTIONS FROM SINGLE IP ==========
+  # Several connections from one IP
   echo ""
   print_status "info" "Detecting potential port scans or DDoS attempts..."
 
@@ -91,7 +91,7 @@ network_threat_detection() {
     print_status "info" "No active external connections to analyze"
   fi
 
-  # ========== LISTENING PORTS ANALYSIS ==========
+  # Listening ports
   echo ""
   print_status "info" "Analyzing listening services..."
   echo ""
@@ -125,7 +125,7 @@ network_threat_detection() {
     done <<<"$listening_services"
   fi
 
-  # ========== UNUSUAL NETWORK ACTIVITY ==========
+  # unsual activites
   echo ""
   print_status "info" "Checking for unusual network activity patterns..."
 
@@ -138,7 +138,7 @@ network_threat_detection() {
     print_status "info" "Install 'nethogs' for bandwidth analysis (pacman -S nethogs)"
   fi
 
-  # ========== DNS REQUESTS ANALYSIS ==========
+  # DNS requests
   echo ""
   print_status "info" "Checking DNS configuration..."
 
@@ -158,7 +158,7 @@ network_threat_detection() {
     done <<<"$dns_servers"
   fi
 
-  # ========== ARP CACHE POISONING CHECK ==========
+  # ARP poisoning
   echo ""
   print_status "info" "Checking for ARP spoofing attempts..."
 
@@ -179,7 +179,7 @@ network_threat_detection() {
     done < <(arp -an 2>/dev/null | awk '{print $4}' | sort | uniq -d)
   fi
 
-  # ========== ACTIVE NETWORK INTERFACES ==========
+  # Active interfaces
   echo ""
   print_status "info" "Network interface status:"
   echo ""
@@ -202,7 +202,7 @@ network_threat_detection() {
     fi
   done < <(ip -br addr show)
 
-  # ========== RECENT CONNECTION LOG ==========
+  # Recent connections
   echo ""
   print_status "info" "Recent connection attempts (last hour)..."
 
@@ -216,7 +216,7 @@ network_threat_detection() {
     echo "  Found $recent_ssh SSH connection attempts in the last hour"
   fi
 
-  # ========== PACKET FILTERING RULES ==========
+  # Packet filtering rule
   echo ""
   print_status "info" "Active packet filtering rules..."
 
@@ -230,7 +230,7 @@ network_threat_detection() {
     print_status "warn" "No packet filtering detected"
   fi
 
-  # ========== SUMMARY ==========
+  # Summary
   echo ""
   echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
 

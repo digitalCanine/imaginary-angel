@@ -18,7 +18,7 @@ integrity_check() {
   print_status "info" "Verifying system integrity..."
   echo ""
 
-  # ========== PACKAGE DATABASE INTEGRITY ==========
+  # Package DB integrity
   print_status "info" "Checking package database integrity..."
 
   if command -v pacman &>/dev/null; then
@@ -107,7 +107,7 @@ integrity_check() {
     fi
   fi
 
-  # ========== CRITICAL SYSTEM FILES ==========
+  # Critical system files
   echo ""
   print_status "info" "Checking critical system files..."
 
@@ -166,7 +166,7 @@ integrity_check() {
     fi
   done
 
-  # ========== CONFIGURATION FILE MERGES ==========
+  # Config file merge
   echo ""
   print_status "info" "Checking for pending configuration merges..."
 
@@ -203,7 +203,7 @@ integrity_check() {
     print_status "ok" "No pending configuration merges"
   fi
 
-  # ========== FILESYSTEM INTEGRITY ==========
+  # Filesystem intergrity
   echo ""
   print_status "info" "Checking filesystem integrity..."
 
@@ -256,7 +256,7 @@ integrity_check() {
     fi
   done < <(df -i / /home 2>/dev/null | tail -n +2)
 
-  # ========== BOOT INTEGRITY ==========
+  # Boot intergrity
   echo ""
   print_status "info" "Checking boot configuration..."
 
@@ -294,7 +294,7 @@ integrity_check() {
     fi
   fi
 
-  # ========== SYSTEMD JOURNAL ==========
+  # System journal
   echo ""
   print_status "info" "Checking systemd journal..."
 
@@ -323,7 +323,7 @@ integrity_check() {
     fi
   fi
 
-  # ========== SWAP SPACE ==========
+  # Swap space
   echo ""
   print_status "info" "Checking swap configuration..."
 
@@ -345,7 +345,7 @@ integrity_check() {
     fi
   fi
 
-  # ========== SUMMARY ==========
+  # Summary
   echo ""
   echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 

@@ -18,7 +18,7 @@ process_analysis() {
   print_status "info" "Analyzing running processes for anomalies..."
   echo ""
 
-  # ========== RESOURCE HOGS ==========
+  # Resource hog
   print_status "info" "Top CPU consumers:"
   echo ""
   echo -e "${CYAN}PID     USER       CPU%   MEM%   TIME      COMMAND${NC}"
@@ -52,7 +52,7 @@ process_analysis() {
     printf "%-6s  %-10s  %-5s  %-5s  %-10s  %s\n" "$pid" "$user" "$cpu" "$mem" "$vsz" "$cmd"
   done
 
-  # ========== SUSPICIOUS PROCESSES ==========
+  # Sussy processes
   echo ""
   print_status "info" "Scanning for suspicious processes..."
   echo ""
@@ -110,7 +110,7 @@ process_analysis() {
     print_status "ok" "No processes with suspicious names"
   fi
 
-  # ========== PROCESSES WITH DELETED BINARIES ==========
+  # Process with deleted binaries
   echo ""
   print_status "info" "Checking for processes with deleted executables..."
 
@@ -140,7 +140,7 @@ process_analysis() {
     echo -e "$deleted_list"
   fi
 
-  # ========== ZOMBIE PROCESSES ==========
+  # Zombies
   echo ""
   print_status "info" "Checking for zombie processes..."
 
@@ -182,7 +182,7 @@ process_analysis() {
     done
   fi
 
-  # ========== PROCESS STATISTICS ==========
+  # Process statistic
   echo ""
   local total_procs=$(ps aux | wc -l)
   local user_procs=$(ps aux | awk '$1 != "root" {print}' | wc -l)
@@ -195,7 +195,7 @@ process_analysis() {
   echo "    User processes: $user_procs"
   echo "    Total threads: $threads"
 
-  # ========== SUMMARY ==========
+  # Summary
   echo ""
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 

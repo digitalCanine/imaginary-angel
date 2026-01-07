@@ -2,11 +2,11 @@
 # System Health Check & Auto-Repair Module
 
 system_health_check() {
-  # ---- HARDEN AGAINST TUI CRASHES ----
+  # Anti system crash
   set +e
   set +u
 
-  # ---- SAFE COUNTER INIT ----
+  # Safer counter
   issues_found=0
   issues_fixed=0
 
@@ -27,7 +27,7 @@ system_health_check() {
   print_status "info" "Running comprehensive system diagnostics..."
   echo ""
 
-  # ========== CPU ==========
+  # CPU
   cpu_idle=$(top -bn1 | awk -F',' '/Cpu/ {print $4}' | awk '{print $1}')
   cpu_usage=$(awk "BEGIN {printf \"%.1f\", 100 - $cpu_idle}")
 
@@ -38,7 +38,7 @@ system_health_check() {
     ((issues_found++))
   fi
 
-  # ========== MEMORY ==========
+  # Memory
   echo ""
   mem_total=$(free -m | awk '/^Mem:/ {print $2}')
   mem_used=$(free -m | awk '/^Mem:/ {print $3}')
@@ -51,7 +51,7 @@ system_health_check() {
     ((issues_found++))
   fi
 
-  # ========== DISK ==========
+  # Disk
   echo ""
   print_status "info" "Disk Usage:"
 
@@ -65,7 +65,7 @@ system_health_check() {
     fi
   done < <(df -h / /home 2>/dev/null | tail -n +2 || true)
 
-  # ========== AUTO FIX ==========
+  # Autofix
   if [ "$AUTO_FIX" = "true" ]; then
     echo ""
     print_status "fix" "Cleaning up disk space..."
@@ -85,7 +85,7 @@ system_health_check() {
     ((issues_fixed++))
   fi
 
-  # ========== SERVICES ==========
+  # Services
   echo ""
   print_status "info" "Checking system services..."
 
@@ -98,7 +98,7 @@ system_health_check() {
     ((issues_found++))
   fi
 
-  # ========== SUMMARY ==========
+  # Summary
   echo ""
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 

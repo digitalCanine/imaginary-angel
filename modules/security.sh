@@ -18,7 +18,7 @@ security_audit() {
   print_status "info" "Running comprehensive security audit..."
   echo ""
 
-  # ========== SSH SECURITY ==========
+  # SSH
   print_status "info" "Checking SSH configuration..."
 
   if [ -f /etc/ssh/sshd_config ]; then
@@ -60,7 +60,7 @@ security_audit() {
     print_status "info" "SSH not installed"
   fi
 
-  # ========== FIREWALL STATUS ==========
+  # Firewall
   echo ""
   print_status "info" "Checking firewall status..."
 
@@ -100,7 +100,7 @@ security_audit() {
     fi
   fi
 
-  # ========== PRIVILEGED USERS ==========
+  # Privileged users
   echo ""
   print_status "info" "Checking for users with UID 0 (superuser privileges)..."
 
@@ -117,7 +117,7 @@ security_audit() {
     vulnerabilities=$((vulnerabilities + 1))
   fi
 
-  # ========== PASSWORD SECURITY ==========
+  # Passwords
   echo ""
   print_status "info" "Checking password security..."
 
@@ -134,7 +134,7 @@ security_audit() {
     vulnerabilities=$((vulnerabilities + 1))
   fi
 
-  # ========== WORLD-WRITABLE FILES ==========
+  # World writable files
   echo ""
   print_status "info" "Checking for dangerous file permissions..."
 
@@ -153,7 +153,7 @@ security_audit() {
     fi
   fi
 
-  # ========== SUID BINARIES ==========
+  # SUID
   echo ""
   print_status "info" "Checking SUID binaries (run with elevated privileges)..."
 
@@ -190,7 +190,7 @@ security_audit() {
     print_status "ok" "All SUID binaries appear standard"
   fi
 
-  # ========== MAC SYSTEM ==========
+  # MAC
   echo ""
   print_status "info" "Checking Mandatory Access Control (MAC) system..."
 
@@ -220,7 +220,7 @@ security_audit() {
     vulnerabilities=$((vulnerabilities + 1))
   fi
 
-  # ========== FAILED LOGIN ATTEMPTS ==========
+  # Failed logins
   echo ""
   print_status "info" "Checking for suspicious login activity..."
 
@@ -247,7 +247,7 @@ security_audit() {
       done
   fi
 
-  # ========== OPEN PORTS ==========
+  # Opened ports
   echo ""
   print_status "info" "Checking for exposed services..."
 
@@ -264,7 +264,7 @@ security_audit() {
     print_status "warn" "FTP (port 21) is running - consider SFTP instead"
   fi
 
-  # ========== KERNEL HARDENING ==========
+  # Kernel hardening
   echo ""
   print_status "info" "Checking kernel security parameters..."
 
@@ -289,7 +289,7 @@ security_audit() {
     fi
   fi
 
-  # ========== SUMMARY ==========
+  # Summary
   echo ""
   echo -e "${CYAN}══════════════════════════════════════════════════════════${NC}"
 
