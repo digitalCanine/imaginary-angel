@@ -209,7 +209,7 @@ show_main_menu() {
   9) configuration_menu ;;
   0)
     echo ""
-    echo -e "${CYAN}Thank you for using Imaginary Angel!${NC}"
+    echo -e "${CYAN}The system stands, quietly.${NC}"
     sleep 3
     clear
     exit 0

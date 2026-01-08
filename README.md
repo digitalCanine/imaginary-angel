@@ -1,5 +1,7 @@
 # Imaginary Angel
 
+`The system stands, quietly.`
+
 **System Guardian for Imaginary Linux**
 
 Imaginary Angel is a comprehensive system security and maintenance tool designed for Imaginary Linux. It provides automated system health checks, security auditing, network threat detection, process analysis, and system recovery capabilities.
