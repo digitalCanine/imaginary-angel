@@ -158,25 +158,109 @@ network_threat_detection() {
     done <<<"$dns_servers"
   fi
 
-  # ARP poisoning
+  dump_neighbor_table() {
+    if command -v arp >/dev/null 2>&1; then
+      arp -an 2>/dev/null | grep -Ev '<incomplete>|\(incomplete\)' | awk '
+      {
+        ip=""; mac="";
+        for (i=1;i<=NF;i++) {
+          if ($i ~ /^\(.*\)$/) { ip=$i; gsub(/[()]/,"",ip); }
+          if ($i=="at") mac=$(i+1);
+        }
+        if (ip!="" && mac!="") print ip, mac;
+      }'
+    elif command -v ip >/dev/null 2>&1; then
+      ip neigh show 2>/dev/null | awk '
+      !/FAILED|INCOMPLETE/ {
+        ip=$1; mac="";
+        for (i=1;i<=NF;i++) if ($i=="lladdr") mac=$(i+1);
+        if (mac!="") print ip, mac;
+      }'
+    fi
+  }
+
+  get_mac_for_ip() {
+    dump_neighbor_table | awk -v gw="$1" '$1==gw{print $2; exit}'
+  }
+
+  get_gateway_ip() {
+    if command -v ip >/dev/null 2>&1; then
+      ip route show default 2>/dev/null | awk '/^default/{print $3; exit}'
+    elif [ "$(uname)" = "Darwin" ]; then
+      route -n get default 2>/dev/null | awk '/gateway:/{print $2; exit}'
+    else
+      netstat -rn 2>/dev/null | awk '/^default|^0\.0\.0\.0/{print $2; exit}'
+    fi
+  }
+
+  # ARP check body
   echo ""
-  print_status "info" "Checking for ARP spoofing attempts..."
+  print_status "info" "Checking for ARP spoofing/poisoning..."
 
-  local arp_duplicates=$(arp -an 2>/dev/null | awk '{print $4}' | sort | uniq -d | wc -l)
+  .
+  local ARP_STATE_DIR="${ARP_STATE_DIR:-$HOME/.cache/arpcheck}"
+  local ARP_STATE_FILE="$ARP_STATE_DIR/gateway_mac"
+  mkdir -p "$ARP_STATE_DIR" 2>/dev/null
 
-  if [ "$arp_duplicates" -eq 0 ]; then
-    print_status "ok" "No duplicate MAC addresses in ARP cache"
+  local gateway_ip gateway_mac known_mac
+  gateway_ip=$(get_gateway_ip)
+
+  if [ -z "$gateway_ip" ]; then
+    print_status "info" "Could not determine default gateway; skipping gateway MAC check"
   else
-    print_status "error" "Duplicate MAC addresses detected - possible ARP spoofing!"
-    threats=$((threats + 1))
+    command -v ping >/dev/null 2>&1 && ping -c 1 "$gateway_ip" >/dev/null 2>&1
+    gateway_mac=$(get_mac_for_ip "$gateway_ip")
 
-    echo -e "  ${RED}Duplicate MAC addresses:${NC}"
-    while IFS= read -r mac; do
-      echo "    $mac"
-      arp -an 2>/dev/null | grep "$mac" | while IFS= read -r line; do
-        echo "      $line"
-      done
-    done < <(arp -an 2>/dev/null | awk '{print $4}' | sort | uniq -d)
+    if [ -z "$gateway_mac" ]; then
+      print_status "info" "Could not resolve MAC for gateway $gateway_ip"
+    elif [ -f "$ARP_STATE_FILE" ]; then
+      known_mac=$(cat "$ARP_STATE_FILE" 2>/dev/null)
+      if [ -n "$known_mac" ] && [ "$gateway_mac" != "$known_mac" ]; then
+        print_status "error" "Gateway MAC changed: $gateway_ip was $known_mac, now $gateway_mac"
+        threats=$((threats + 1))
+        echo -e "  ${RED}This is the strongest indicator of active ARP spoofing.${NC}"
+        echo "  If you haven't replaced your router, treat this as a live attack."
+      else
+        print_status "ok" "Gateway MAC unchanged ($gateway_ip -> $gateway_mac)"
+      fi
+      echo "$gateway_mac" >"$ARP_STATE_FILE"
+    else
+      print_status "info" "No baseline yet - recording gateway MAC ($gateway_ip -> $gateway_mac)"
+      echo "$gateway_mac" >"$ARP_STATE_FILE"
+    fi
+  fi
+
+  echo ""
+  print_status "info" "Scanning for MAC addresses claiming multiple IP addresses..."
+
+  local pairs filtered dup_macs
+  pairs=$(dump_neighbor_table)
+
+  if [ -z "$pairs" ]; then
+    print_status "info" "No ARP/neighbor entries available to scan"
+  else
+    filtered=$(echo "$pairs" | awk '
+    {
+      mac=tolower($2)
+      if (mac ~ /^00:00:5e:00:0[12]:/) next   # VRRP
+      if (mac ~ /^00:00:0c:07:ac:/) next        # HSRP
+      if (mac ~ /^00:07:b4:/) next               # GLBP
+      print
+    }')
+    dup_macs=$(echo "$filtered" | awk '{print $2}' | sort | uniq -d)
+
+    if [ -z "$dup_macs" ]; then
+      print_status "ok" "No MAC address is claiming multiple IP addresses"
+    else
+      print_status "error" "MAC address(es) claiming multiple IPs - likely ARP poisoning!"
+      threats=$((threats + 1))
+      echo -e "  ${RED}Conflicting entries (verify - could also be a bridge/proxy-ARP setup):${NC}"
+      while IFS= read -r mac; do
+        [ -z "$mac" ] && continue
+        echo "    $mac:"
+        echo "$filtered" | awk -v m="$mac" '$2==m{print "      " $1}'
+      done <<<"$dup_macs"
+    fi
   fi
 
   # Active interfaces
@@ -192,7 +276,7 @@ network_threat_detection() {
     if [ "$state" = "UP" ]; then
       print_status "ok" "$iface: $addr (active)"
 
-      # Check for promiscuous mode (packet sniffing)
+      # Check for packet sniffing
       if ip link show "$iface" 2>/dev/null | grep -q "PROMISC"; then
         print_status "warn" "$iface is in PROMISCUOUS mode (packet capture active)"
         threats=$((threats + 1))

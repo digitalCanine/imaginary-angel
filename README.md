@@ -6,7 +6,7 @@
 
 Imaginary Angel is a comprehensive system security and maintenance tool designed for Imaginary Linux. It provides automated system health checks, security auditing, network threat detection, process analysis, and system recovery capabilities.
 
-![Version](https://img.shields.io/badge/version-1.0.1-purple)
+![Version](https://img.shields.io/badge/version-1.0.2-purple)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Arch](https://img.shields.io/badge/arch-linux-blue)
 
