@@ -197,7 +197,6 @@ network_threat_detection() {
   echo ""
   print_status "info" "Checking for ARP spoofing/poisoning..."
 
-  .
   local ARP_STATE_DIR="${ARP_STATE_DIR:-$HOME/.cache/arpcheck}"
   local ARP_STATE_FILE="$ARP_STATE_DIR/gateway_mac"
   mkdir -p "$ARP_STATE_DIR" 2>/dev/null
