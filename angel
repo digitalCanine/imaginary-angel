@@ -1,6 +1,6 @@
 #!/bin/bash
 # imaginary-angel - Imaginary Linux System Guardian
-# Version 1.1.0 (Shamshel)
+# Version 1.9.0 (Shamshel)
 # A comprehensive system security and maintenance tool
 
 # No errexit/pipefail: this is an interactive menu, and under -e a declined
@@ -10,7 +10,7 @@
 set -u
 
 # Configuration
-VERSION="1.1.0"
+VERSION="1.9.0"
 CODENAME="Shamshel"
 
 # Determine if we're running from installed location or source
