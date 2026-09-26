@@ -45,18 +45,19 @@ system_update() {
   echo ""
 
   if command -v pacman &>/dev/null; then
-    # Arch-based
-    print_status "info" "Synchronizing package databases..."
-    pacman -Sy
-
-    echo ""
     print_status "info" "Checking for updates..."
-    local updates=$(pacman -Qu | wc -l)
+    local updates
+    if command -v checkupdates &>/dev/null; then
+      updates=$(checkupdates 2>/dev/null | grep -c . || true)
+    else
+      # No checkupdates: -Syu below syncs and shows its own summary
+      updates=-1
+    fi
 
     if [ "$updates" -eq 0 ]; then
       print_status "ok" "System is up to date!"
     else
-      print_status "info" "$updates package(s) can be updated"
+      [ "$updates" -gt 0 ] && print_status "info" "$updates package(s) can be updated"
       echo ""
       pacman -Syu
     fi
@@ -68,11 +69,7 @@ system_update() {
 
     echo ""
     print_status "info" "Upgrading packages..."
-    apt-get upgrade -y
-
-    echo ""
-    print_status "info" "Checking for dist-upgrade..."
-    apt-get dist-upgrade -y
+    apt-get dist-upgrade
 
   elif command -v dnf &>/dev/null; then
     # Fedora-based
@@ -157,7 +154,7 @@ remove_orphans() {
 
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
       print_status "info" "Removing orphaned packages..."
-      pacman -Rns $(pacman -Qtdq) || true
+      pacman -Rns $orphans || true
       print_status "ok" "Orphaned packages removed"
     fi
 
@@ -186,12 +183,21 @@ clean_cache() {
     print_status "info" "Current cache size: $cache_size"
 
     echo ""
-    echo -e "${YELLOW}This will remove all cached packages except the latest 3 versions${NC}"
+    if command -v paccache &>/dev/null; then
+      echo -e "${YELLOW}This will remove all cached packages except the latest 2 versions${NC}"
+    else
+      echo -e "${YELLOW}paccache not found (pacman-contrib); falling back to 'pacman -Sc',${NC}"
+      echo -e "${YELLOW}which removes cached versions of packages that are no longer installed${NC}"
+    fi
     echo -e -n "${WHITE}Continue? (y/N):${NC} "
     read -r confirm
 
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      paccache -rk3 2>/dev/null || pacman -Sc
+      if command -v paccache &>/dev/null; then
+        paccache -rk2
+      else
+        pacman -Sc
+      fi
       print_status "ok" "Cache cleaned"
 
       local new_size=$(du -sh /var/cache/pacman/pkg 2>/dev/null | awk '{print $1}')
@@ -221,7 +227,14 @@ check_outdated() {
   echo ""
 
   if command -v pacman &>/dev/null; then
-    local outdated=$(pacman -Qu 2>/dev/null)
+    local outdated
+    if command -v checkupdates &>/dev/null; then
+      # Syncs into a temp DB: fresh results, no root, system DB untouched
+      outdated=$(checkupdates 2>/dev/null || true)
+    else
+      print_status "warn" "checkupdates not found (pacman-contrib); results reflect the last sync"
+      outdated=$(pacman -Qu 2>/dev/null || true)
+    fi
 
     if [ -z "$outdated" ]; then
       print_status "ok" "All packages are up to date!"
@@ -232,7 +245,7 @@ check_outdated() {
       echo "$outdated"
     fi
 
-  elif command -v apt list &>/dev/null; then
+  elif command -v apt &>/dev/null; then
     apt list --upgradable 2>/dev/null
 
   else

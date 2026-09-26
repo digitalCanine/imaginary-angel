@@ -1,12 +1,12 @@
 #!/bin/bash
 # imaginary-angel - Imaginary Linux System Guardian
-# Version 1.0.1 (Shamshel)
+# Version 1.1.0 (Shamshel)
 # A comprehensive system security and maintenance tool
 
 set -euo pipefail
 
 # Configuration
-VERSION="1.0.1"
+VERSION="1.1.0"
 CODENAME="Shamshel"
 
 # Determine if we're running from installed location or source

@@ -2,13 +2,9 @@
 # System Health Check & Auto-Repair Module
 
 system_health_check() {
-  # Anti system crash
-  set +e
-  set +u
-
-  # Safer counter
-  issues_found=0
-  issues_fixed=0
+  local issues_found=0
+  local issues_fixed=0
+  local disk_full=false
 
   print_logo
   draw_box 70 "SYSTEM HEALTH & AUTO-REPAIR"
@@ -27,75 +23,89 @@ system_health_check() {
   print_status "info" "Running comprehensive system diagnostics..."
   echo ""
 
-  # CPU
-  cpu_idle=$(top -bn1 | awk -F',' '/Cpu/ {print $4}' | awk '{print $1}')
-  cpu_usage=$(awk "BEGIN {printf \"%.1f\", 100 - $cpu_idle}")
+  # CPU (sampled from /proc/stat over 0.5s)
+  local cpu1 cpu2 cpu_usage
+  cpu1=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat)
+  sleep 0.5
+  cpu2=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat)
+  cpu_usage=$(awk -v a="$cpu1" -v b="$cpu2" 'BEGIN {
+    split(a, x, " "); split(b, y, " ")
+    total = y[1] - x[1]; idle = y[2] - x[2]
+    printf "%.1f", (total > 0) ? (1 - idle / total) * 100 : 0
+  }')
 
-  if (($(echo "$cpu_usage < $ALERT_THRESHOLD_CPU" | bc -l))); then
+  if awk -v a="$cpu_usage" -v b="$ALERT_THRESHOLD_CPU" 'BEGIN {exit !(a < b)}'; then
     print_status "ok" "CPU Usage: ${cpu_usage}%"
   else
     print_status "error" "CPU Usage: ${cpu_usage}% (High!)"
-    ((issues_found++))
+    issues_found=$((issues_found + 1))
   fi
 
   # Memory
   echo ""
-  mem_total=$(free -m | awk '/^Mem:/ {print $2}')
-  mem_used=$(free -m | awk '/^Mem:/ {print $3}')
-  mem_percent=$(awk "BEGIN {printf \"%.1f\", ($mem_used/$mem_total)*100}")
+  local mem_total mem_used mem_percent
+  read -r mem_total mem_used < <(free -m | awk '/^Mem:/ {print $2, $3}')
+  mem_percent=$(awk -v u="$mem_used" -v t="$mem_total" 'BEGIN {printf "%.1f", (u / t) * 100}')
 
-  if (($(echo "$mem_percent < $ALERT_THRESHOLD_MEM" | bc -l))); then
+  if awk -v a="$mem_percent" -v b="$ALERT_THRESHOLD_MEM" 'BEGIN {exit !(a < b)}'; then
     print_status "ok" "Memory: ${mem_used}MB / ${mem_total}MB (${mem_percent}%)"
   else
     print_status "error" "Memory: ${mem_used}MB / ${mem_total}MB (${mem_percent}%)"
-    ((issues_found++))
+    issues_found=$((issues_found + 1))
   fi
 
   # Disk
   echo ""
   print_status "info" "Disk Usage:"
 
+  local fs size used avail pct mount usage
   while read -r fs size used avail pct mount; do
     usage=${pct%\%}
     if [ "$usage" -lt "$ALERT_THRESHOLD_DISK" ]; then
       print_status "ok" "$mount: $used/$size ($pct used, $avail free)"
     else
       print_status "error" "$mount: $used/$size ($pct used)"
-      ((issues_found++))
+      issues_found=$((issues_found + 1))
+      disk_full=true
     fi
-  done < <(df -h / /home 2>/dev/null | tail -n +2 || true)
+  done < <(df -hP / /home 2>/dev/null | tail -n +2 | sort -u -k6,6)
 
-  # Autofix
-  if [ "$AUTO_FIX" = "true" ]; then
+  # Autofix (only when a filesystem is over threshold)
+  if [ "$AUTO_FIX" = "true" ] && [ "$disk_full" = "true" ]; then
     echo ""
     print_status "fix" "Cleaning up disk space..."
 
-    if command -v pacman &>/dev/null; then
+    if command -v paccache &>/dev/null; then
+      echo "  Pruning package cache (keeping 2 versions)..."
+      paccache -rk2 >/dev/null 2>&1 || true
+    elif command -v pacman &>/dev/null; then
       echo "  Cleaning package cache..."
       pacman -Sc --noconfirm </dev/null >/dev/null 2>&1 || true
-      ((issues_fixed++))
     fi
 
     echo "  Cleaning journal logs..."
     journalctl --vacuum-time=7d >/dev/null 2>&1 || true
-    ((issues_fixed++))
 
     echo "  Cleaning temp files..."
-    find /tmp /var/tmp -type f -atime +7 -delete 2>/dev/null || true
-    ((issues_fixed++))
-  fi
+    systemd-tmpfiles --clean >/dev/null 2>&1 || true
 
-  # Services
-  echo ""
+    issues_fixed=$((issues_fixed + 1))
+  fi
+  # Services echo ""
   print_status "info" "Checking system services..."
 
-  failed_services=$(systemctl list-units --state=failed --no-legend 2>/dev/null | wc -l)
+  local failed_list failed_services
+  failed_list=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | awk '{print $1}' || true)
+  failed_services=$(grep -c . <<<"$failed_list" || true)
 
   if [ "$failed_services" -eq 0 ]; then
     print_status "ok" "All services running normally"
   else
     print_status "error" "$failed_services failed service(s)"
-    ((issues_found++))
+    while IFS= read -r unit; do
+      echo -e "    ${RED}▸${NC} $unit"
+    done <<<"$failed_list"
+    issues_found=$((issues_found + 1))
   fi
 
   # Summary

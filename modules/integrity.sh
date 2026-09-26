@@ -23,8 +23,10 @@ integrity_check() {
 
   if command -v pacman &>/dev/null; then
     # Check for broken packages
-    local broken_output=$(pacman -Qk 2>&1 | grep "warning")
-    local broken=$(echo "$broken_output" | wc -l)
+    # grep -c (not wc -l): echo of an empty string is still one line
+    # "Permission denied" means we couldn't look (non-root run), not that a file is bad
+    local broken_output=$(pacman -Qk 2>&1 | grep "^warning" | grep -v "(Permission denied)" || true)
+    local broken=$(grep -c . <<<"$broken_output" || true)
 
     if [ "$broken" -eq 0 ]; then
       print_status "ok" "Package database integrity verified"
@@ -79,8 +81,10 @@ integrity_check() {
       fi
     fi
   elif command -v dpkg &>/dev/null; then
-    local broken_packages=$(dpkg -l | grep "^.i[^i]")
-    local broken=$(echo "$broken_packages" | wc -l)
+    # Anything not installed-ok (ii), removed-with-config (rc), unknown (un),
+    # held (hi) or purged (pn), including states carrying an error flag (e.g. iiR)
+    local broken_packages=$(dpkg -l 2>/dev/null | awk 'NR > 5 && $1 !~ /^(ii|rc|un|hi|pn)$/' || true)
+    local broken=$(grep -c . <<<"$broken_packages" || true)
 
     if [ "$broken" -eq 0 ]; then
       print_status "ok" "Package database integrity verified"
@@ -129,8 +133,9 @@ integrity_check() {
 
       case "$file" in
       */shadow | */gshadow)
-        if [ "$perms" != "640" ] && [ "$perms" != "000" ]; then
-          print_status "warn" "$file has permissions $perms (should be 640)"
+        # Distros differ (000, 600, 640); anything at least this strict is fine
+        if [ "$perms" != "640" ] && [ "$perms" != "600" ] && [ "$perms" != "400" ] && [ "$perms" != "000" ]; then
+          print_status "warn" "$file has permissions $perms (expected 640 or stricter)"
           issues=$((issues + 1))
 
           if [ "$AUTO_FIX" = "true" ]; then
@@ -233,28 +238,28 @@ integrity_check() {
     local mount=$(echo "$line" | awk '{print $6}')
     local usage=$(echo "$line" | awk '{print $5}' | tr -d '%')
 
+    [[ "$usage" =~ ^[0-9]+$ ]] || continue
+
     if [ "$usage" -gt 95 ]; then
       print_status "error" "$mount is critically full (${usage}%)"
       issues=$((issues + 1))
     fi
-  done < <(df -h / /home 2>/dev/null | tail -n +2)
+  # -P: one line per filesystem; dedupe by device so a shared / and /home count once
+  done < <(df -hP / /home 2>/dev/null | tail -n +2 | awk '!seen[$1]++')
 
   # Check inode usage
   while IFS= read -r line; do
     local mount=$(echo "$line" | awk '{print $6}')
     local iuse=$(echo "$line" | awk '{print $5}' | tr -d '%')
 
+    # btrfs and some other filesystems report "-" for inodes
+    [[ "$iuse" =~ ^[0-9]+$ ]] || continue
+
     if [ "$iuse" -gt 90 ]; then
       print_status "warn" "$mount has ${iuse}% inodes used"
       issues=$((issues + 1))
-
-      if [ "$AUTO_FIX" = "true" ]; then
-        print_status "fix" "Finding and removing empty files..."
-        find "$mount" -type f -empty -delete 2>/dev/null || true
-        fixed=$((fixed + 1))
-      fi
     fi
-  done < <(df -i / /home 2>/dev/null | tail -n +2)
+  done < <(df -iP / /home 2>/dev/null | tail -n +2 | awk '!seen[$1]++')
 
   # Boot intergrity
   echo ""
@@ -285,9 +290,12 @@ integrity_check() {
     fi
 
     # Check for bootloader
-    if [ -f /boot/grub/grub.cfg ]; then
+    if [ -f /boot/grub/grub.cfg ] || [ -f /boot/grub2/grub.cfg ]; then
       print_status "ok" "GRUB bootloader configuration found"
-    elif [ -d /boot/efi/EFI ]; then
+    elif [ -f /boot/loader/loader.conf ] || [ -f /efi/loader/loader.conf ] ||
+      { command -v bootctl &>/dev/null && bootctl is-installed &>/dev/null; }; then
+      print_status "ok" "systemd-boot configuration found"
+    elif [ -d /boot/efi/EFI ] || [ -d /boot/EFI ] || [ -d /efi/EFI ]; then
       print_status "ok" "EFI boot configuration found"
     else
       print_status "warn" "Could not verify bootloader configuration"
@@ -304,7 +312,8 @@ integrity_check() {
     print_status "info" "Journal size: $journal_size"
 
     # Check for journal errors
-    local journal_errors=$(journalctl -p err -b 2>/dev/null | wc -l)
+    # -q drops the "-- No entries --" line, which wc -l would count as an error
+    local journal_errors=$(journalctl -q -p err -b --no-pager 2>/dev/null | grep -c . || true)
 
     if [ "$journal_errors" -eq 0 ]; then
       print_status "ok" "No errors in current boot journal"
@@ -319,7 +328,7 @@ integrity_check() {
           echo -e "    ${YELLOW}▸${NC} $(echo $line | cut -c1-70)..."
         fi
         count=$((count + 1))
-      done < <(journalctl -p err -b 2>/dev/null | tail -5)
+      done < <(journalctl -q -p err -b --no-pager 2>/dev/null | tail -5)
     fi
   fi
 
@@ -331,8 +340,8 @@ integrity_check() {
   local swap_used=$(free -m | awk '/^Swap:/{print $3}')
 
   if [ "$swap_total" -eq 0 ]; then
-    print_status "warn" "No swap space configured"
-    issues=$((issues + 1))
+    # Swapless setups are common and deliberate, so this is informational only
+    print_status "info" "No swap space configured"
   else
     local swap_percent=$(awk "BEGIN {printf \"%.0f\", ($swap_used/$swap_total)*100}")
 

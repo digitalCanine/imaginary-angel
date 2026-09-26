@@ -77,11 +77,6 @@ process_analysis() {
 
         echo "    ${RED}▸${NC} PID $pid ($user): $cmd [CPU: ${cpu}%, MEM: ${mem}%]"
 
-        if [ "$AUTO_FIX" = "true" ]; then
-          echo "      ${YELLOW}Terminating suspicious process...${NC}"
-          kill -9 "$pid" 2>/dev/null || true
-          ((cleaned++))
-        fi
       fi
     done
   else
