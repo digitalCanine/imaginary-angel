@@ -21,38 +21,44 @@ security_audit() {
   # SSH
   print_status "info" "Checking SSH configuration..."
 
-  if [ -f /etc/ssh/sshd_config ]; then
-    # Check root login
-    if grep -q "^PermitRootLogin yes" /etc/ssh/sshd_config 2>/dev/null; then
-      print_status "error" "SSH root login is ENABLED (critical security risk)"
+  if command -v sshd &>/dev/null && [ -f /etc/ssh/sshd_config ]; then
+    # sshd -T prints the effective config, including sshd_config.d drop-ins
+    # (where hardening puts its settings); fall back to the main file
+    local sshd_eff root_login empty_pw pass_auth
+    sshd_eff=$(sshd -T 2>/dev/null || true)
+    if [ -z "$sshd_eff" ]; then
+      sshd_eff=$(grep -Ei '^[[:space:]]*(PermitRootLogin|PermitEmptyPasswords|PasswordAuthentication)[[:space:]]' \
+        /etc/ssh/sshd_config 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)
+    fi
+    root_login=$(awk '$1 == "permitrootlogin" {print $2; exit}' <<<"$sshd_eff")
+    empty_pw=$(awk '$1 == "permitemptypasswords" {print $2; exit}' <<<"$sshd_eff")
+    pass_auth=$(awk '$1 == "passwordauthentication" {print $2; exit}' <<<"$sshd_eff")
+
+    local ssh_bad=false
+    if [ "$root_login" = "yes" ]; then
+      print_status "error" "SSH root login with a password is ENABLED (critical security risk)"
       vulnerabilities=$((vulnerabilities + 1))
-
-      if [ "$AUTO_FIX" = "true" ]; then
-        print_status "fix" "Disabling SSH root login..."
-        sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
-        systemctl restart sshd 2>/dev/null || true
-        fixed=$((fixed + 1))
-      fi
+      ssh_bad=true
     else
-      print_status "ok" "SSH root login is disabled"
+      print_status "ok" "SSH root login: ${root_login:-prohibit-password}"
     fi
 
-    # Check password authentication
-    if ! grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config 2>/dev/null; then
-      print_status "warn" "SSH password authentication is enabled (key-based is more secure)"
-    else
+    if [ "$pass_auth" = "no" ]; then
       print_status "ok" "SSH using key-based authentication"
+    else
+      print_status "warn" "SSH password authentication is enabled (key-based is more secure)"
     fi
 
-    # Check for empty passwords
-    if grep -q "^PermitEmptyPasswords yes" /etc/ssh/sshd_config 2>/dev/null; then
+    if [ "$empty_pw" = "yes" ]; then
       print_status "error" "SSH allows empty passwords!"
       vulnerabilities=$((vulnerabilities + 1))
+      ssh_bad=true
+    fi
 
-      if [ "$AUTO_FIX" = "true" ]; then
-        print_status "fix" "Disabling empty password login..."
-        sed -i 's/^PermitEmptyPasswords yes/PermitEmptyPasswords no/' /etc/ssh/sshd_config
-        systemctl restart sshd 2>/dev/null || true
+    if [ "$ssh_bad" = true ] && [ "$AUTO_FIX" = "true" ]; then
+      # Writes a drop-in, validates it with sshd -t and reloads (existing sessions stay up)
+      print_status "fix" "Applying SSH hardening..."
+      if run_hardening ssh; then
         fixed=$((fixed + 1))
       fi
     fi
@@ -80,23 +86,11 @@ security_audit() {
     vulnerabilities=$((vulnerabilities + 1))
 
     if [ "$AUTO_FIX" = "true" ]; then
-      print_status "fix" "Installing and configuring UFW..."
-
-      if command -v pacman &>/dev/null; then
-        pacman -S --noconfirm ufw >/dev/null 2>&1 || true
-      elif command -v apt-get &>/dev/null; then
-        apt-get install -y ufw >/dev/null 2>&1 || true
+      # Keeps SSH reachable if sshd is in use (including the current session)
+      print_status "fix" "Enabling the firewall (UFW)..."
+      if run_hardening firewall; then
+        fixed=$((fixed + 1))
       fi
-
-      systemctl enable ufw >/dev/null 2>&1
-      systemctl start ufw >/dev/null 2>&1
-      ufw --force enable >/dev/null 2>&1
-      ufw default deny incoming >/dev/null 2>&1
-      ufw default allow outgoing >/dev/null 2>&1
-      ufw allow ssh >/dev/null 2>&1
-
-      print_status "fix" "Firewall configured and activated"
-      fixed=$((fixed + 1))
     fi
   fi
 
@@ -124,13 +118,14 @@ security_audit() {
   # Check for users with empty passwords
   local empty_pass_count=0
   if [ -r /etc/shadow ]; then
-    empty_pass_count=$(awk -F: '($2 == "" || $2 == "!") && $1 != "root" {print $1}' /etc/shadow 2>/dev/null | wc -l)
+    # An empty field means no password at all; "!" or "*" means locked, which is safe
+    empty_pass_count=$(awk -F: '$2 == "" {print $1}' /etc/shadow 2>/dev/null | wc -l)
   fi
 
   if [ "$empty_pass_count" -eq 0 ]; then
     print_status "ok" "No users with empty passwords"
   else
-    print_status "error" "$empty_pass_count user(s) with empty/locked passwords"
+    print_status "error" "$empty_pass_count user(s) can log in without a password"
     vulnerabilities=$((vulnerabilities + 1))
   fi
 
@@ -202,10 +197,11 @@ security_audit() {
       vulnerabilities=$((vulnerabilities + 1))
 
       if [ "$AUTO_FIX" = "true" ]; then
-        print_status "fix" "Enabling AppArmor..."
-        systemctl enable apparmor 2>/dev/null || true
-        systemctl start apparmor 2>/dev/null || true
-        fixed=$((fixed + 1))
+        # AppArmor also needs the lsm= kernel parameter, which harden.sh adds
+        print_status "fix" "Enabling AppArmor (active after reboot)..."
+        if run_hardening apparmor; then
+          fixed=$((fixed + 1))
+        fi
       fi
     fi
   elif command -v sestatus &>/dev/null; then
@@ -282,10 +278,11 @@ security_audit() {
     print_status "warn" "SYN cookie protection disabled"
 
     if [ "$AUTO_FIX" = "true" ]; then
+      # Writes /etc/sysctl.d (Arch doesn't read /etc/sysctl.conf at boot) and applies it
       print_status "fix" "Enabling SYN cookie protection..."
-      echo 1 >/proc/sys/net/ipv4/tcp_syncookies
-      echo "net.ipv4.tcp_syncookies = 1" >>/etc/sysctl.conf
-      fixed=$((fixed + 1))
+      if run_hardening sysctl; then
+        fixed=$((fixed + 1))
+      fi
     fi
   fi
 
@@ -312,5 +309,4 @@ security_audit() {
   echo ""
   echo -e "${GRAY}Press Enter to return to main menu...${NC}"
   read -r
-  show_main_menu
 }

@@ -1,5 +1,6 @@
 #!/bin/bash
 # Imaginary Linux system hardening
+# Usage: harden.sh [STEP...]   (no steps = all; e.g. "harden.sh ssh firewall")
 
 set -uo pipefail
 
@@ -377,6 +378,31 @@ EOF
   ok "systemd-resolved configured (only used if resolved is enabled)"
 }
 
+# Ports sshd needs open, so enabling the firewall never cuts off SSH access.
+# Includes the port of the SSH session this script is running in, if any.
+ssh_ports() {
+  local ports=""
+
+  if systemctl is-enabled --quiet sshd.service 2>/dev/null ||
+    systemctl is-active --quiet sshd.service 2>/dev/null ||
+    systemctl is-active --quiet sshd.socket 2>/dev/null; then
+    # sshd -T prints the effective config, including drop-ins and a changed Port
+    ports=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2}')
+    [ -n "$ports" ] || ports=22
+  fi
+
+  # SSH_CONNECTION is "client_ip client_port server_ip server_port"
+  if [ -n "${SSH_CONNECTION:-}" ]; then
+    ports="$ports ${SSH_CONNECTION##* }"
+  fi
+
+  # sudo drops SSH_CONNECTION by default, so also look for live sshd sessions
+  ports="$ports $(ss -Htnp state established 2>/dev/null |
+    awk '/"sshd/ {n = split($3, a, ":"); print a[n]}')"
+
+  echo "$ports" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -un
+}
+
 harden_firewall() {
   [ "$HARDEN_FIREWALL" = true ] || return 0
 
@@ -402,11 +428,12 @@ harden_firewall() {
   ufw default deny incoming >/dev/null || return 1
   ufw default allow outgoing >/dev/null || return 1
 
-  # Only open SSH when the server is actually enabled, and rate-limit it
-  if systemctl is-enabled --quiet sshd.service 2>/dev/null; then
-    ufw limit 22/tcp comment 'SSH' >/dev/null || warn "Could not add the SSH firewall rule"
-    info "SSH is enabled, allowed port 22 with rate limiting"
-  fi
+  # Only open SSH when the server is enabled or running, and rate-limit it
+  local port
+  for port in $(ssh_ports); do
+    ufw limit "$port/tcp" comment 'SSH' >/dev/null || warn "Could not add the SSH firewall rule for port $port"
+    info "SSH is in use, allowed port $port with rate limiting"
+  done
 
   if live; then
     ufw --force enable >/dev/null || return 1
@@ -524,22 +551,27 @@ main() {
   [ "$HARDEN_STRICT" = true ] && info "Strict mode is on"
   echo ""
 
-  run_step harden_sysctl
-  run_step harden_modules
-  run_step harden_coredumps
-  run_step harden_ssh
-  run_step harden_su
-  run_step harden_permissions
-  run_step harden_umask
-  run_step harden_resolved
-  run_step harden_firewall
-  run_step harden_apparmor
+  local all_steps=(sysctl modules coredumps ssh su permissions umask resolved firewall apparmor)
+  local steps=("$@") step
+  [ ${#steps[@]} -gt 0 ] || steps=("${all_steps[@]}")
 
-  {
-    echo "version=$HARDEN_VERSION"
-    echo "applied=$(date -Iseconds)"
-    echo "strict=$HARDEN_STRICT"
-  } >"$STATE_DIR/state"
+  for step in "${steps[@]}"; do
+    if [[ " ${all_steps[*]} " != *" $step "* ]]; then
+      fail "Unknown step '$step' (valid: ${all_steps[*]})"
+      ERRORS=$((ERRORS + 1))
+      continue
+    fi
+    run_step "harden_$step"
+  done
+
+  # Only a full run counts as the recorded hardening state
+  if [ $# -eq 0 ]; then
+    {
+      echo "version=$HARDEN_VERSION"
+      echo "applied=$(date -Iseconds)"
+      echo "strict=$HARDEN_STRICT"
+    } >"$STATE_DIR/state"
+  fi
 
   echo ""
   info "Done: $CHANGES change(s), $WARNINGS warning(s), $ERRORS error(s)"

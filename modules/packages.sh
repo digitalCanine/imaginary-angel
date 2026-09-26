@@ -2,41 +2,42 @@
 # Package Management Module
 
 package_manager() {
-  print_logo
-  draw_box 65 "PACKAGE MANAGEMENT & UPDATES"
-  echo ""
+  while true; do
+    print_logo
+    draw_box 65 "PACKAGE MANAGEMENT & UPDATES"
+    echo ""
 
-  box_line "  ${CYAN}1${NC}) System Update"
-  box_line "  ${CYAN}2${NC}) Search Packages"
-  box_line "  ${CYAN}3${NC}) List Installed Packages"
-  box_line "  ${CYAN}4${NC}) Remove Orphaned Packages"
-  box_line "  ${CYAN}5${NC}) Clean Package Cache"
-  box_line "  ${CYAN}6${NC}) Check for Outdated Packages"
-  box_line "  ${CYAN}7${NC}) Show Package Statistics"
-  box_line ""
-  box_line "  ${CYAN}0${NC}) Back to Main Menu"
-  box_line ""
-  draw_box_bottom 65
+    box_line "  ${CYAN}1${NC}) System Update"
+    box_line "  ${CYAN}2${NC}) Search Packages"
+    box_line "  ${CYAN}3${NC}) List Installed Packages"
+    box_line "  ${CYAN}4${NC}) Remove Orphaned Packages"
+    box_line "  ${CYAN}5${NC}) Clean Package Cache"
+    box_line "  ${CYAN}6${NC}) Check for Outdated Packages"
+    box_line "  ${CYAN}7${NC}) Show Package Statistics"
+    box_line ""
+    box_line "  ${CYAN}0${NC}) Back to Main Menu"
+    box_line ""
+    draw_box_bottom 65
 
-  echo ""
-  echo -e -n "${WHITE}Select option:${NC} "
-  read -r choice
+    echo ""
+    echo -e -n "${WHITE}Select option:${NC} "
+    read -r choice
 
-  case $choice in
-  1) system_update ;;
-  2) search_packages ;;
-  3) list_packages ;;
-  4) remove_orphans ;;
-  5) clean_cache ;;
-  6) check_outdated ;;
-  7) package_stats ;;
-  0) show_main_menu ;;
-  *)
-    echo -e "${RED}Invalid option${NC}"
-    sleep 1
-    package_manager
-    ;;
-  esac
+    case $choice in
+    1) system_update ;;
+    2) search_packages ;;
+    3) list_packages ;;
+    4) remove_orphans ;;
+    5) clean_cache ;;
+    6) check_outdated ;;
+    7) package_stats ;;
+    0) return ;;
+    *)
+      echo -e "${RED}Invalid option${NC}"
+      sleep 1
+      ;;
+    esac
+  done
 }
 
 system_update() {
@@ -83,7 +84,6 @@ system_update() {
   echo ""
   echo -e "${GRAY}Press Enter to return to package menu...${NC}"
   read -r
-  package_manager
 }
 
 search_packages() {
@@ -92,7 +92,6 @@ search_packages() {
   read -r pkg
 
   if [ -z "$pkg" ]; then
-    package_manager
     return
   fi
 
@@ -111,7 +110,6 @@ search_packages() {
   echo ""
   echo -e "${GRAY}Press Enter to return to package menu...${NC}"
   read -r
-  package_manager
 }
 
 list_packages() {
@@ -126,8 +124,6 @@ list_packages() {
   elif command -v rpm &>/dev/null; then
     rpm -qa | less
   fi
-
-  package_manager
 }
 
 remove_orphans() {
@@ -143,7 +139,6 @@ remove_orphans() {
       echo ""
       echo -e "${GRAY}Press Enter to return to package menu...${NC}"
       read -r
-      package_manager
       return
     fi
 
@@ -170,7 +165,6 @@ remove_orphans() {
   echo ""
   echo -e "${GRAY}Press Enter to return to package menu...${NC}"
   read -r
-  package_manager
 }
 
 clean_cache() {
@@ -218,7 +212,6 @@ clean_cache() {
   echo ""
   echo -e "${GRAY}Press Enter to return to package menu...${NC}"
   read -r
-  package_manager
 }
 
 check_outdated() {
@@ -255,7 +248,6 @@ check_outdated() {
   echo ""
   echo -e "${GRAY}Press Enter to return to package menu...${NC}"
   read -r
-  package_manager
 }
 
 package_stats() {
@@ -290,5 +282,4 @@ package_stats() {
   echo ""
   echo -e "${GRAY}Press Enter to return to package menu...${NC}"
   read -r
-  package_manager
 }

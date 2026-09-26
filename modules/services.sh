@@ -2,39 +2,40 @@
 # Service Management & Optimization Module
 
 service_manager() {
-  print_logo
-  draw_box 75 "SERVICE MANAGEMENT & OPTIMIZATION"
-  echo ""
+  while true; do
+    print_logo
+    draw_box 75 "SERVICE MANAGEMENT & OPTIMIZATION"
+    echo ""
 
-  box_line "  ${CYAN}1${NC}) View Active Services"
-  box_line "  ${CYAN}2${NC}) View Failed Services"
-  box_line "  ${CYAN}3${NC}) Restart Failed Services"
-  box_line "  ${CYAN}4${NC}) Disable Unnecessary Services"
-  box_line "  ${CYAN}5${NC}) Service Resource Usage"
-  box_line "  ${CYAN}6${NC}) Boot Time Analysis"
-  box_line ""
-  box_line "  ${CYAN}0${NC}) Back to Main Menu"
-  box_line ""
-  draw_box_bottom 75
+    box_line "  ${CYAN}1${NC}) View Active Services"
+    box_line "  ${CYAN}2${NC}) View Failed Services"
+    box_line "  ${CYAN}3${NC}) Restart Failed Services"
+    box_line "  ${CYAN}4${NC}) Disable Unnecessary Services"
+    box_line "  ${CYAN}5${NC}) Service Resource Usage"
+    box_line "  ${CYAN}6${NC}) Boot Time Analysis"
+    box_line ""
+    box_line "  ${CYAN}0${NC}) Back to Main Menu"
+    box_line ""
+    draw_box_bottom 75
 
-  echo ""
-  echo -e -n "${WHITE}Select option:${NC} "
-  read -r choice
+    echo ""
+    echo -e -n "${WHITE}Select option:${NC} "
+    read -r choice
 
-  case $choice in
-  1) view_active_services ;;
-  2) view_failed_services ;;
-  3) restart_failed_services ;;
-  4) disable_unnecessary ;;
-  5) service_resource_usage ;;
-  6) boot_time_analysis ;;
-  0) show_main_menu ;;
-  *)
-    echo -e "${RED}Invalid option${NC}"
-    sleep 1
-    service_manager
-    ;;
-  esac
+    case $choice in
+    1) view_active_services ;;
+    2) view_failed_services ;;
+    3) restart_failed_services ;;
+    4) disable_unnecessary ;;
+    5) service_resource_usage ;;
+    6) boot_time_analysis ;;
+    0) return ;;
+    *)
+      echo -e "${RED}Invalid option${NC}"
+      sleep 1
+      ;;
+    esac
+  done
 }
 
 view_active_services() {
@@ -47,7 +48,6 @@ view_active_services() {
   echo ""
   echo -e "${GRAY}Press Enter to return to service menu...${NC}"
   read -r
-  service_manager
 }
 
 view_failed_services() {
@@ -69,7 +69,6 @@ view_failed_services() {
   echo ""
   echo -e "${GRAY}Press Enter to return to service menu...${NC}"
   read -r
-  service_manager
 }
 
 restart_failed_services() {
@@ -83,14 +82,13 @@ restart_failed_services() {
     echo ""
     echo -e "${GRAY}Press Enter to return to service menu...${NC}"
     read -r
-    service_manager
     return
   fi
 
   echo ""
   print_status "info" "Failed services:"
   echo "$failed_services" | while read service; do
-    echo "  ${RED}▸${NC} $service"
+    echo -e "  ${RED}▸${NC} $service"
   done
 
   echo ""
@@ -108,7 +106,7 @@ restart_failed_services() {
         print_status "ok" "$service restarted successfully"
       else
         print_status "error" "Failed to restart $service"
-        echo "    ${GRAY}Check logs: journalctl -u $service${NC}"
+        echo -e "    ${GRAY}Check logs: journalctl -u $service${NC}"
       fi
     done
   fi
@@ -116,7 +114,6 @@ restart_failed_services() {
   echo ""
   echo -e "${GRAY}Press Enter to return to service menu...${NC}"
   read -r
-  service_manager
 }
 
 disable_unnecessary() {
@@ -145,16 +142,16 @@ disable_unnecessary() {
       # Provide context
       case "$service" in
       bluetooth.service)
-        echo "    ${GRAY}(Only needed if you use Bluetooth devices)${NC}"
+        echo -e "    ${GRAY}(Only needed if you use Bluetooth devices)${NC}"
         ;;
       cups.service)
-        echo "    ${GRAY}(Only needed if you use printers)${NC}"
+        echo -e "    ${GRAY}(Only needed if you use printers)${NC}"
         ;;
       avahi-daemon.service)
-        echo "    ${GRAY}(mDNS/Zeroconf - rarely needed)${NC}"
+        echo -e "    ${GRAY}(mDNS/Zeroconf - rarely needed)${NC}"
         ;;
       ModemManager.service)
-        echo "    ${GRAY}(Only needed for mobile broadband)${NC}"
+        echo -e "    ${GRAY}(Only needed for mobile broadband)${NC}"
         ;;
       esac
     fi
@@ -165,7 +162,6 @@ disable_unnecessary() {
     echo ""
     echo -e "${GRAY}Press Enter to return to service menu...${NC}"
     read -r
-    service_manager
     return
   fi
 
@@ -175,7 +171,6 @@ disable_unnecessary() {
   read -r service
 
   if [ "$service" = "q" ] || [ -z "$service" ]; then
-    service_manager
     return
   fi
 
@@ -196,7 +191,6 @@ disable_unnecessary() {
   echo ""
   echo -e "${GRAY}Press Enter to return to service menu...${NC}"
   read -r
-  service_manager
 }
 
 service_resource_usage() {
@@ -233,7 +227,6 @@ service_resource_usage() {
   echo ""
   echo -e "${GRAY}Press Enter to return to service menu...${NC}"
   read -r
-  service_manager
 }
 
 boot_time_analysis() {
@@ -263,5 +256,4 @@ boot_time_analysis() {
   echo ""
   echo -e "${GRAY}Press Enter to return to service menu...${NC}"
   read -r
-  service_manager
 }

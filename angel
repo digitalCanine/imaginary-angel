@@ -3,7 +3,11 @@
 # Version 1.1.0 (Shamshel)
 # A comprehensive system security and maintenance tool
 
-set -euo pipefail
+# No errexit/pipefail: this is an interactive menu, and under -e a declined
+# pacman prompt, a search with no results or an empty grep would kill the tool
+# mid-task. Commands that matter check their own status. -u still stops on
+# unset variables before they can reach a destructive command.
+set -u
 
 # Configuration
 VERSION="1.1.0"
@@ -24,6 +28,8 @@ else
   SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
   MODULES_DIR="${SCRIPT_DIR}/modules"
 fi
+HARDEN_SCRIPT="$(dirname "$MODULES_DIR")/hardening/harden.sh"
+DEFAULT_CONFIG="$(dirname "$MODULES_DIR")/imaginary-angel.conf.default"
 
 # System directories
 
@@ -125,6 +131,16 @@ print_status() {
   esac
 }
 
+# Apply hardening steps through harden.sh, so the audit's fixes match what the
+# installer applied (validated SSH drop-in, firewall that keeps SSH reachable, ...)
+run_hardening() {
+  if [ ! -f "$HARDEN_SCRIPT" ]; then
+    print_status "error" "Hardening script not found: $HARDEN_SCRIPT"
+    return 1
+  fi
+  bash "$HARDEN_SCRIPT" "$@"
+}
+
 wait_key() {
   echo ""
   echo -e "${GRAY}Press Enter to continue...${NC}"
@@ -140,21 +156,27 @@ check_root() {
   fi
 }
 
+# Restore the shipped config, so a reset keeps every setting (including the
+# HARDEN_* options harden.sh reads) and its documentation
+write_default_config() {
+  local src
+  for src in "$DEFAULT_CONFIG" "$(dirname "$MODULES_DIR")/imaginary-angel.conf"; do
+    if [ -f "$src" ]; then
+      [ -f "$CONFIG_FILE" ] && cp -a "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+      install -m644 "$src" "$CONFIG_FILE"
+      return
+    fi
+  done
+  echo -e "${RED}Default configuration not found (looked for $DEFAULT_CONFIG)${NC}"
+  return 1
+}
+
 init_directories() {
   mkdir -p "$LOG_DIR"
   mkdir -p "$CACHE_DIR"
 
   if [ ! -f "$CONFIG_FILE" ]; then
-    cat >"$CONFIG_FILE" <<'EOF'
-# Imaginary Angel Configuration
-AUTO_FIX=false
-LOG_RETENTION_DAYS=30
-ALERT_THRESHOLD_CPU=80
-ALERT_THRESHOLD_MEM=85
-ALERT_THRESHOLD_DISK=90
-SUSPICIOUS_PROCESS_CHECK=true
-NETWORK_ANOMALY_DETECTION=true
-EOF
+    write_default_config
   fi
 }
 
@@ -217,138 +239,126 @@ show_main_menu() {
   *)
     echo -e "${RED}Invalid option${NC}"
     sleep 1
-    show_main_menu
     ;;
   esac
 }
 
 # Config menu
 configuration_menu() {
-  print_logo
-  draw_box 60 "CONFIGURATION"
-  echo ""
+  while true; do
+    print_logo
+    draw_box 60 "CONFIGURATION"
+    echo ""
 
-  # Load current config
-  if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-  fi
+    # Load current config
+    if [ -f "$CONFIG_FILE" ]; then
+      source "$CONFIG_FILE"
+    fi
 
-  # Set defaults
-  AUTO_FIX=${AUTO_FIX:-false}
-  ALERT_THRESHOLD_CPU=${ALERT_THRESHOLD_CPU:-80}
-  ALERT_THRESHOLD_MEM=${ALERT_THRESHOLD_MEM:-85}
-  ALERT_THRESHOLD_DISK=${ALERT_THRESHOLD_DISK:-90}
+    # Set defaults
+    AUTO_FIX=${AUTO_FIX:-false}
+    ALERT_THRESHOLD_CPU=${ALERT_THRESHOLD_CPU:-80}
+    ALERT_THRESHOLD_MEM=${ALERT_THRESHOLD_MEM:-85}
+    ALERT_THRESHOLD_DISK=${ALERT_THRESHOLD_DISK:-90}
 
-  box_line "Current Settings:"
-  box_line ""
-  box_line "  Auto-Fix Issues: ${AUTO_FIX}"
-  box_line "  CPU Alert Threshold: ${ALERT_THRESHOLD_CPU}%"
-  box_line "  Memory Alert Threshold: ${ALERT_THRESHOLD_MEM}%"
-  box_line "  Disk Alert Threshold: ${ALERT_THRESHOLD_DISK}%"
-  box_line ""
-  box_line "${CYAN}1${NC}) Toggle Auto-Fix (currently: ${AUTO_FIX})"
-  box_line "${CYAN}2${NC}) Set CPU Alert Threshold"
-  box_line "${CYAN}3${NC}) Set Memory Alert Threshold"
-  box_line "${CYAN}4${NC}) Set Disk Alert Threshold"
-  box_line "${CYAN}5${NC}) Reset to Defaults"
-  box_line "${CYAN}6${NC}) View Full Configuration File"
-  box_line ""
-  box_line "${CYAN}0${NC}) Back to Main Menu"
-  box_line ""
-  draw_box_bottom 60
+    box_line "Current Settings:"
+    box_line ""
+    box_line "  Auto-Fix Issues: ${AUTO_FIX}"
+    box_line "  CPU Alert Threshold: ${ALERT_THRESHOLD_CPU}%"
+    box_line "  Memory Alert Threshold: ${ALERT_THRESHOLD_MEM}%"
+    box_line "  Disk Alert Threshold: ${ALERT_THRESHOLD_DISK}%"
+    box_line ""
+    box_line "${CYAN}1${NC}) Toggle Auto-Fix (currently: ${AUTO_FIX})"
+    box_line "${CYAN}2${NC}) Set CPU Alert Threshold"
+    box_line "${CYAN}3${NC}) Set Memory Alert Threshold"
+    box_line "${CYAN}4${NC}) Set Disk Alert Threshold"
+    box_line "${CYAN}5${NC}) Reset to Defaults"
+    box_line "${CYAN}6${NC}) View Full Configuration File"
+    box_line ""
+    box_line "${CYAN}0${NC}) Back to Main Menu"
+    box_line ""
+    draw_box_bottom 60
 
-  echo ""
-  echo -e -n "${WHITE}Select option:${NC} "
-  read -r choice
+    echo ""
+    echo -e -n "${WHITE}Select option:${NC} "
+    read -r choice
 
-  case $choice in
-  1)
-    if [ "$AUTO_FIX" = "true" ]; then
-      sed -i 's/^AUTO_FIX=true/AUTO_FIX=false/' "$CONFIG_FILE"
+    case $choice in
+    1)
+      if [ "$AUTO_FIX" = "true" ]; then
+        sed -i 's/^AUTO_FIX=true/AUTO_FIX=false/' "$CONFIG_FILE"
+        echo ""
+        print_status "info" "Auto-fix disabled"
+      else
+        sed -i 's/^AUTO_FIX=false/AUTO_FIX=true/' "$CONFIG_FILE"
+        echo ""
+        print_status "info" "Auto-fix enabled"
+      fi
+      sleep 2
+      ;;
+    2)
       echo ""
-      print_status "info" "Auto-fix disabled"
-    else
-      sed -i 's/^AUTO_FIX=false/AUTO_FIX=true/' "$CONFIG_FILE"
+      echo -e "${WHITE}Enter new CPU threshold % (current: ${ALERT_THRESHOLD_CPU}):${NC} "
+      read -r cpu_thresh
+      if [[ "$cpu_thresh" =~ ^[0-9]+$ ]] && [ "$cpu_thresh" -ge 1 ] && [ "$cpu_thresh" -le 100 ]; then
+        sed -i "s/ALERT_THRESHOLD_CPU=.*/ALERT_THRESHOLD_CPU=${cpu_thresh}/" "$CONFIG_FILE"
+        print_status "ok" "CPU threshold set to ${cpu_thresh}%"
+      else
+        print_status "error" "Invalid value. Must be between 1-100"
+      fi
+      sleep 2
+      ;;
+    3)
       echo ""
-      print_status "info" "Auto-fix enabled"
-    fi
-    sleep 2
-    configuration_menu
-    ;;
-  2)
-    echo ""
-    echo -e "${WHITE}Enter new CPU threshold % (current: ${ALERT_THRESHOLD_CPU}):${NC} "
-    read -r cpu_thresh
-    if [[ "$cpu_thresh" =~ ^[0-9]+$ ]] && [ "$cpu_thresh" -ge 1 ] && [ "$cpu_thresh" -le 100 ]; then
-      sed -i "s/ALERT_THRESHOLD_CPU=.*/ALERT_THRESHOLD_CPU=${cpu_thresh}/" "$CONFIG_FILE"
-      print_status "ok" "CPU threshold set to ${cpu_thresh}%"
-    else
-      print_status "error" "Invalid value. Must be between 1-100"
-    fi
-    sleep 2
-    configuration_menu
-    ;;
-  3)
-    echo ""
-    echo -e "${WHITE}Enter new Memory threshold % (current: ${ALERT_THRESHOLD_MEM}):${NC} "
-    read -r mem_thresh
-    if [[ "$mem_thresh" =~ ^[0-9]+$ ]] && [ "$mem_thresh" -ge 1 ] && [ "$mem_thresh" -le 100 ]; then
-      sed -i "s/ALERT_THRESHOLD_MEM=.*/ALERT_THRESHOLD_MEM=${mem_thresh}/" "$CONFIG_FILE"
-      print_status "ok" "Memory threshold set to ${mem_thresh}%"
-    else
-      print_status "error" "Invalid value. Must be between 1-100"
-    fi
-    sleep 2
-    configuration_menu
-    ;;
-  4)
-    echo ""
-    echo -e "${WHITE}Enter new Disk threshold % (current: ${ALERT_THRESHOLD_DISK}):${NC} "
-    read -r disk_thresh
-    if [[ "$disk_thresh" =~ ^[0-9]+$ ]] && [ "$disk_thresh" -ge 1 ] && [ "$disk_thresh" -le 100 ]; then
-      sed -i "s/ALERT_THRESHOLD_DISK=.*/ALERT_THRESHOLD_DISK=${disk_thresh}/" "$CONFIG_FILE"
-      print_status "ok" "Disk threshold set to ${disk_thresh}%"
-    else
-      print_status "error" "Invalid value. Must be between 1-100"
-    fi
-    sleep 2
-    configuration_menu
-    ;;
-  5)
-    echo ""
-    echo -e -n "${YELLOW}Reset all settings to defaults? (y/N):${NC} "
-    read -r confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      cat >"$CONFIG_FILE" <<'EOF'
-# Imaginary Angel Configuration
-AUTO_FIX=false
-LOG_RETENTION_DAYS=30
-ALERT_THRESHOLD_CPU=80
-ALERT_THRESHOLD_MEM=85
-ALERT_THRESHOLD_DISK=90
-SUSPICIOUS_PROCESS_CHECK=true
-NETWORK_ANOMALY_DETECTION=true
-EOF
-      print_status "ok" "Configuration reset to defaults"
-    fi
-    sleep 2
-    configuration_menu
-    ;;
-  6)
-    echo ""
-    cat "$CONFIG_FILE"
-    echo ""
-    echo -e "${GRAY}Press Enter to continue...${NC}"
-    read -r
-    configuration_menu
-    ;;
-  0) show_main_menu ;;
-  *)
-    echo -e "${RED}Invalid option${NC}"
-    sleep 1
-    configuration_menu
-    ;;
-  esac
+      echo -e "${WHITE}Enter new Memory threshold % (current: ${ALERT_THRESHOLD_MEM}):${NC} "
+      read -r mem_thresh
+      if [[ "$mem_thresh" =~ ^[0-9]+$ ]] && [ "$mem_thresh" -ge 1 ] && [ "$mem_thresh" -le 100 ]; then
+        sed -i "s/ALERT_THRESHOLD_MEM=.*/ALERT_THRESHOLD_MEM=${mem_thresh}/" "$CONFIG_FILE"
+        print_status "ok" "Memory threshold set to ${mem_thresh}%"
+      else
+        print_status "error" "Invalid value. Must be between 1-100"
+      fi
+      sleep 2
+      ;;
+    4)
+      echo ""
+      echo -e "${WHITE}Enter new Disk threshold % (current: ${ALERT_THRESHOLD_DISK}):${NC} "
+      read -r disk_thresh
+      if [[ "$disk_thresh" =~ ^[0-9]+$ ]] && [ "$disk_thresh" -ge 1 ] && [ "$disk_thresh" -le 100 ]; then
+        sed -i "s/ALERT_THRESHOLD_DISK=.*/ALERT_THRESHOLD_DISK=${disk_thresh}/" "$CONFIG_FILE"
+        print_status "ok" "Disk threshold set to ${disk_thresh}%"
+      else
+        print_status "error" "Invalid value. Must be between 1-100"
+      fi
+      sleep 2
+      ;;
+    5)
+      echo ""
+      echo -e -n "${YELLOW}Reset all settings to defaults? (y/N):${NC} "
+      read -r confirm
+      if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        if write_default_config; then
+          print_status "ok" "Configuration reset to defaults (previous one saved as ${CONFIG_FILE}.bak)"
+        else
+          print_status "error" "Could not reset the configuration"
+        fi
+      fi
+      sleep 2
+      ;;
+    6)
+      echo ""
+      cat "$CONFIG_FILE"
+      echo ""
+      echo -e "${GRAY}Press Enter to continue...${NC}"
+      read -r
+      ;;
+    0) return ;;
+    *)
+      echo -e "${RED}Invalid option${NC}"
+      sleep 1
+      ;;
+    esac
+  done
 }
 
 # Main
@@ -356,7 +366,10 @@ main() {
   check_root
   init_directories
   load_modules
-  show_main_menu
+  # Menus return here instead of calling each other, so the stack doesn't grow
+  while true; do
+    show_main_menu
+  done
 }
 
 # Run main function

@@ -13,7 +13,6 @@ process_analysis() {
   AUTO_FIX=${AUTO_FIX:-false}
 
   local suspicious=0
-  local cleaned=0
 
   print_status "info" "Analyzing running processes for anomalies..."
   echo ""
@@ -63,7 +62,7 @@ process_analysis() {
 
   if [ "$tmp_count" -gt 0 ]; then
     print_status "error" "$tmp_count process(es) running from temporary directories!"
-    ((suspicious++))
+    suspicious=$((suspicious + 1))
 
     echo ""
     echo -e "  ${RED}Processes from temporary locations:${NC}"
@@ -75,7 +74,7 @@ process_analysis() {
         local mem=$(echo "$line" | awk '{print $4}')
         local cmd=$(echo "$line" | awk '{print $11}')
 
-        echo "    ${RED}▸${NC} PID $pid ($user): $cmd [CPU: ${cpu}%, MEM: ${mem}%]"
+        echo -e "    ${RED}▸${NC} PID $pid ($user): $cmd [CPU: ${cpu}%, MEM: ${mem}%]"
 
       fi
     done
@@ -90,7 +89,7 @@ process_analysis() {
 
   if [ "$hidden_count" -gt 0 ]; then
     print_status "warn" "$hidden_count process(es) with suspicious names detected"
-    ((suspicious++))
+    suspicious=$((suspicious + 1))
 
     echo ""
     echo -e "  ${YELLOW}Suspicious process names:${NC}"
@@ -98,7 +97,7 @@ process_analysis() {
       if [ -n "$line" ]; then
         local pid=$(echo "$line" | awk '{print $2}')
         local cmd=$(echo "$line" | awk '{print $11}')
-        echo "    ${YELLOW}▸${NC} PID $pid: $cmd"
+        echo -e "    ${YELLOW}▸${NC} PID $pid: $cmd"
       fi
     done
   else
@@ -116,7 +115,7 @@ process_analysis() {
     if [ -L "$exe" ]; then
       local target=$(readlink "$exe" 2>/dev/null)
       if echo "$target" | grep -q "(deleted)"; then
-        ((deleted_count++))
+        deleted_count=$((deleted_count + 1))
         local pid=$(echo "$exe" | cut -d'/' -f3)
         local cmd=$(ps -p "$pid" -o comm= 2>/dev/null)
         if [ -n "$cmd" ]; then
@@ -146,7 +145,7 @@ process_analysis() {
     print_status "ok" "No zombie processes found"
   else
     print_status "error" "$zombie_count zombie process(es) detected"
-    ((suspicious++))
+    suspicious=$((suspicious + 1))
 
     echo ""
     echo -e "  ${RED}Zombie processes:${NC}"
@@ -157,24 +156,14 @@ process_analysis() {
         local user=$(echo "$line" | awk '{print $1}')
         local cmd=$(echo "$line" | awk '{print $11}')
 
-        echo "    ${RED}▸${NC} PID $pid (parent: $ppid, user: $user): $cmd"
-
-        if [ "$AUTO_FIX" = "true" ] && [ -n "$ppid" ] && [ "$ppid" -gt 1 ]; then
-          echo "      ${YELLOW}Sending SIGCHLD to parent process...${NC}"
-          kill -CHLD "$ppid" 2>/dev/null || true
-          sleep 1
-
-          # If still zombie, kill parent
-          if ps -p "$pid" -o stat= 2>/dev/null | grep -q Z; then
-            echo "      ${YELLOW}Terminating parent process $ppid...${NC}"
-            kill -9 "$ppid" 2>/dev/null || true
-            ((cleaned++))
-          else
-            ((cleaned++))
-          fi
-        fi
+        echo -e "    ${RED}▸${NC} PID $pid (parent: $ppid, user: $user): $cmd"
       fi
     done
+
+    # Zombies use no CPU or memory, and the parent is often a desktop session,
+    # sshd or a terminal, so never kill it automatically
+    echo ""
+    echo -e "  ${GRAY}Zombies are harmless unless they pile up. If they do, restart the parent process.${NC}"
   fi
 
   # Process statistic
@@ -198,20 +187,11 @@ process_analysis() {
     print_status "ok" "No suspicious processes detected - system is clean"
   else
     echo -e "${RED}Found $suspicious suspicious process(es)${NC}"
-
-    if [ "$AUTO_FIX" = "true" ]; then
-      echo -e "${GREEN}Cleaned $cleaned process(es) automatically${NC}"
-
-      if [ "$cleaned" -lt "$suspicious" ]; then
-        echo -e "${YELLOW}$(($suspicious - $cleaned)) issue(s) require manual investigation${NC}"
-      fi
-    else
-      echo -e "${GRAY}Enable AUTO_FIX in Configuration menu to automatically terminate suspicious processes${NC}"
-    fi
+    # Killing processes on a guess can take down a session, so this is always manual
+    echo -e "${GRAY}Review the processes above; nothing is terminated automatically${NC}"
   fi
 
   echo ""
   echo -e "${GRAY}Press Enter to return to main menu...${NC}"
   read -r
-  show_main_menu
 }

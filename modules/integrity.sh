@@ -51,7 +51,7 @@ integrity_check() {
       done <<<"$broken_output"
 
       if [ "$broken" -gt 20 ]; then
-        echo "    ${GRAY}... and $(($broken - 20)) more${NC}"
+        echo -e "    ${GRAY}... and $(($broken - 20)) more${NC}"
       fi
 
       if [ "$AUTO_FIX" = "true" ]; then
@@ -64,6 +64,19 @@ integrity_check() {
         if [ -n "$packages" ]; then
           while IFS= read -r pkg; do
             if [ -n "$pkg" ]; then
+              # Only reinstall the exact installed version: pulling a newer one from
+              # the sync DB without a full -Syu is a partial upgrade and can break the system
+              local installed_ver sync_ver
+              installed_ver=$(pacman -Q "$pkg" 2>/dev/null | awk '{print $2}')
+              sync_ver=$(pacman -Si "$pkg" 2>/dev/null | awk -F': ' '/^Version/{print $2; exit}')
+              if [ -z "$sync_ver" ]; then
+                print_status "warn" "Skipping $pkg: not in the sync repos (AUR or local package)"
+                continue
+              fi
+              if [ "$installed_ver" != "$sync_ver" ]; then
+                print_status "warn" "Skipping $pkg: repo has $sync_ver, installed is $installed_ver (run a full update first)"
+                continue
+              fi
               echo "  Reinstalling $pkg..."
               if pacman -S --noconfirm "$pkg" >/dev/null 2>&1; then
                 print_status "ok" "Reinstalled $pkg"
@@ -192,7 +205,7 @@ integrity_check() {
     done < <(find /etc -name "*.pacnew" 2>/dev/null)
 
     if [ "$pacnew_count" -gt 5 ]; then
-      echo "    ${GRAY}... and $(($pacnew_count - 5)) more${NC}"
+      echo -e "    ${GRAY}... and $(($pacnew_count - 5)) more${NC}"
     fi
   fi
 
@@ -273,17 +286,9 @@ integrity_check() {
       if [ "$boot_free" -lt 10000 ]; then
         print_status "warn" "/boot partition low on space"
         issues=$((issues + 1))
-
-        if [ "$AUTO_FIX" = "true" ]; then
-          print_status "fix" "Cleaning old kernels..."
-
-          if command -v pacman &>/dev/null; then
-            # Keep only 2 latest kernels
-            pacman -Q | grep "^linux " | sort -V | head -n -2 |
-              awk '{print $1}' | xargs pacman -R --noconfirm 2>/dev/null || true
-            fixed=$((fixed + 1))
-          fi
-        fi
+        # Arch keeps one version per kernel package, so there are no old kernels to
+        # prune; removing a kernel package automatically could leave nothing bootable
+        echo -e "    ${GRAY}Check for kernels you no longer use: pacman -Q | grep -E '^linux(-lts|-zen|-hardened)? '${NC}"
       else
         print_status "ok" "/boot has adequate space"
       fi
@@ -377,5 +382,4 @@ integrity_check() {
   echo ""
   echo -e "${GRAY}Press Enter to return to main menu...${NC}"
   read -r
-  show_main_menu
 }

@@ -2,41 +2,42 @@
 # System Reports & Diagnostics Module
 
 system_reports() {
-  print_logo
-  draw_box 70 "SYSTEM REPORTS & DIAGNOSTICS"
-  echo ""
+  while true; do
+    print_logo
+    draw_box 70 "SYSTEM REPORTS & DIAGNOSTICS"
+    echo ""
 
-  box_line "  ${CYAN}1${NC}) Generate Full System Report"
-  box_line "  ${CYAN}2${NC}) View System Logs (journalctl)"
-  box_line "  ${CYAN}3${NC}) View Failed Login Attempts"
-  box_line "  ${CYAN}4${NC}) View Kernel Messages (dmesg)"
-  box_line "  ${CYAN}5${NC}) Hardware Information"
-  box_line "  ${CYAN}6${NC}) Performance Report"
-  box_line "  ${CYAN}7${NC}) Security Summary"
-  box_line ""
-  box_line "  ${CYAN}0${NC}) Back to Main Menu"
-  box_line ""
-  draw_box_bottom 70
+    box_line "  ${CYAN}1${NC}) Generate Full System Report"
+    box_line "  ${CYAN}2${NC}) View System Logs (journalctl)"
+    box_line "  ${CYAN}3${NC}) View Failed Login Attempts"
+    box_line "  ${CYAN}4${NC}) View Kernel Messages (dmesg)"
+    box_line "  ${CYAN}5${NC}) Hardware Information"
+    box_line "  ${CYAN}6${NC}) Performance Report"
+    box_line "  ${CYAN}7${NC}) Security Summary"
+    box_line ""
+    box_line "  ${CYAN}0${NC}) Back to Main Menu"
+    box_line ""
+    draw_box_bottom 70
 
-  echo ""
-  echo -e -n "${WHITE}Select option:${NC} "
-  read -r choice
+    echo ""
+    echo -e -n "${WHITE}Select option:${NC} "
+    read -r choice
 
-  case $choice in
-  1) generate_full_report ;;
-  2) view_system_logs ;;
-  3) view_failed_logins ;;
-  4) view_kernel_messages ;;
-  5) hardware_info ;;
-  6) performance_report ;;
-  7) security_summary ;;
-  0) show_main_menu ;;
-  *)
-    echo -e "${RED}Invalid option${NC}"
-    sleep 1
-    system_reports
-    ;;
-  esac
+    case $choice in
+    1) generate_full_report ;;
+    2) view_system_logs ;;
+    3) view_failed_logins ;;
+    4) view_kernel_messages ;;
+    5) hardware_info ;;
+    6) performance_report ;;
+    7) security_summary ;;
+    0) return ;;
+    *)
+      echo -e "${RED}Invalid option${NC}"
+      sleep 1
+      ;;
+    esac
+  done
 }
 
 generate_full_report() {
@@ -176,7 +177,6 @@ generate_full_report() {
   fi
 
   wait_key
-  system_reports
 }
 
 view_system_logs() {
@@ -185,8 +185,6 @@ view_system_logs() {
   echo ""
 
   journalctl -xe
-
-  system_reports
 }
 
 view_failed_logins() {
@@ -223,7 +221,6 @@ view_failed_logins() {
   fi
 
   wait_key
-  system_reports
 }
 
 view_kernel_messages() {
@@ -232,8 +229,6 @@ view_kernel_messages() {
   echo ""
 
   dmesg | less
-
-  system_reports
 }
 
 hardware_info() {
@@ -279,7 +274,6 @@ hardware_info() {
   fi
 
   wait_key
-  system_reports
 }
 
 performance_report() {
@@ -332,7 +326,6 @@ performance_report() {
   ps aux --sort=-%mem | head -6 | tail -5 | awk '{printf "  %s (PID %s): %.1f%%\n", $11, $2, $4}'
 
   wait_key
-  system_reports
 }
 
 security_summary() {
@@ -355,13 +348,17 @@ security_summary() {
   echo ""
   echo -e "${CYAN}═══ SSH Security ═══${NC}"
   if [ -f /etc/ssh/sshd_config ]; then
-    local root_login=$(grep "^PermitRootLogin" /etc/ssh/sshd_config | awk '{print $2}')
-    local pass_auth=$(grep "^PasswordAuthentication" /etc/ssh/sshd_config | awk '{print $2}')
+    # Effective config, including sshd_config.d drop-ins written by hardening
+    local sshd_eff=$(sshd -T 2>/dev/null || true)
+    local root_login=$(awk '$1 == "permitrootlogin" {print $2; exit}' <<<"$sshd_eff")
+    local pass_auth=$(awk '$1 == "passwordauthentication" {print $2; exit}' <<<"$sshd_eff")
 
-    if [ "$root_login" = "no" ]; then
-      print_status "ok" "Root login disabled"
+    if [ -z "$root_login" ]; then
+      print_status "info" "Could not read the effective sshd config (sshd -T failed)"
+    elif [ "$root_login" = "yes" ]; then
+      print_status "error" "Root login with a password enabled"
     else
-      print_status "error" "Root login enabled"
+      print_status "ok" "Root login: ${root_login:-unknown}"
     fi
 
     echo "Password Authentication: ${pass_auth:-default}"
@@ -401,5 +398,4 @@ security_summary() {
   fi
 
   wait_key
-  system_reports
 }

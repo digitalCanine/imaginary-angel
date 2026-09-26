@@ -127,5 +127,4 @@ system_health_check() {
   echo ""
   echo -e "${GRAY}Press Enter to return to main menu...${NC}"
   read -r
-  show_main_menu
 }

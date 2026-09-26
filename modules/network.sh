@@ -1,6 +1,24 @@
 #!/bin/bash
 # Network Threat Detection Module
 
+# Addresses auto-blocking must never touch: loopback, private/link-local ranges
+# (the LAN, the router, DNS forwarders) and the client of an SSH session
+is_blockable_ip() {
+  local ip=$1
+  case "$ip" in
+  127.* | 10.* | 192.168.* | 169.254.* | 0.*) return 1 ;;
+  172.1[6-9].* | 172.2[0-9].* | 172.3[01].*) return 1 ;;
+  esac
+  if [ -n "${SSH_CLIENT:-}" ] && [ "${SSH_CLIENT%% *}" = "$ip" ]; then
+    return 1
+  fi
+  # sudo drops SSH_CLIENT, so also check live sshd sessions
+  if ss -Htnp state established 2>/dev/null | awk '/"sshd/ {print $4}' | grep -q "^$ip:"; then
+    return 1
+  fi
+  return 0
+}
+
 network_threat_detection() {
   print_logo
   draw_box 75 "NETWORK THREAT DETECTION"
@@ -49,7 +67,11 @@ network_threat_detection() {
   print_status "info" "Detecting potential port scans or DDoS attempts..."
 
   # Count connections per remote IP
-  local connection_analysis=$(ss -tunap 2>/dev/null | grep ESTAB | awk '{print $6}' |
+  # Only inbound connections (to a port this machine listens on) count: a browser
+  # easily opens 10+ outbound connections to one CDN, and that is not an attack
+  local listen_ports=$(ss -Htln 2>/dev/null | awk '{n = split($4, a, ":"); print a[n]}' | sort -u | tr '\n' ' ')
+  local connection_analysis=$(ss -Htn state established 2>/dev/null |
+    awk -v ports=" $listen_ports" '{n = split($3, a, ":"); if (index(ports, " " a[n] " ")) print $4}' |
     grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -rn)
 
   local found_suspicious=false
@@ -65,9 +87,14 @@ network_threat_detection() {
         found_suspicious=true
 
         if [ "$AUTO_FIX" = "true" ] && command -v ufw &>/dev/null; then
-          print_status "fix" "Blocking $ip..."
-          ufw deny from "$ip" >/dev/null 2>&1
-          blocked=$((blocked + 1))
+          if ! is_blockable_ip "$ip"; then
+            print_status "info" "Not blocking $ip (local network or your own SSH session)"
+          elif ufw deny from "$ip" >/dev/null 2>&1; then
+            print_status "fix" "Blocked $ip"
+            blocked=$((blocked + 1))
+          else
+            print_status "error" "Could not block $ip"
+          fi
         fi
       elif [ "$count" -gt 5 ]; then
         print_status "warn" "$ip has $count active connections (monitoring)"
@@ -197,7 +224,8 @@ network_threat_detection() {
   echo ""
   print_status "info" "Checking for ARP spoofing/poisoning..."
 
-  local ARP_STATE_DIR="${ARP_STATE_DIR:-$HOME/.cache/arpcheck}"
+  # Under sudo $HOME can be the user's home, so keep root's state in angel's cache
+  local ARP_STATE_DIR="${CACHE_DIR:-/var/cache/imaginary-angel}/arpcheck"
   local ARP_STATE_FILE="$ARP_STATE_DIR/gateway_mac"
   mkdir -p "$ARP_STATE_DIR" 2>/dev/null
 
@@ -207,7 +235,8 @@ network_threat_detection() {
   if [ -z "$gateway_ip" ]; then
     print_status "info" "Could not determine default gateway; skipping gateway MAC check"
   else
-    command -v ping >/dev/null 2>&1 && ping -c 1 "$gateway_ip" >/dev/null 2>&1
+    # Refresh the neighbor entry; many routers don't answer ping, which is fine
+    ping -c 1 -W 1 "$gateway_ip" >/dev/null 2>&1 || true
     gateway_mac=$(get_mac_for_ip "$gateway_ip")
 
     if [ -z "$gateway_mac" ]; then
@@ -222,10 +251,10 @@ network_threat_detection() {
       else
         print_status "ok" "Gateway MAC unchanged ($gateway_ip -> $gateway_mac)"
       fi
-      echo "$gateway_mac" >"$ARP_STATE_FILE"
+      echo "$gateway_mac" 2>/dev/null >"$ARP_STATE_FILE" || print_status "warn" "Could not save the gateway MAC baseline to $ARP_STATE_FILE"
     else
       print_status "info" "No baseline yet - recording gateway MAC ($gateway_ip -> $gateway_mac)"
-      echo "$gateway_mac" >"$ARP_STATE_FILE"
+      echo "$gateway_mac" 2>/dev/null >"$ARP_STATE_FILE" || print_status "warn" "Could not save the gateway MAC baseline to $ARP_STATE_FILE"
     fi
   fi
 
@@ -336,5 +365,4 @@ network_threat_detection() {
   echo ""
   echo -e "${GRAY}Press Enter to return to main menu...${NC}"
   read -r
-  show_main_menu
 }
